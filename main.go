@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"io"
+	"time"
 	// "strings"
 	"gopkg.in/urfave/cli.v1"
 	"github.com/satyrius/gonx"
@@ -94,32 +95,64 @@ func draw_interface(){
 
 	
 	header := widgets.NewParagraph()
-	header.Text = "Press q to quit, Press h or l to switch tabs"
-	header.SetRect(0, 0, 50, 1)
-	header.Border = false
+	header.Text = "Apreta ctrl+c para salir"
+	header.SetRect(0, 0, termWidth, 1)
+	header.Border = true
 	header.TextStyle.Bg = ui.ColorBlue
 
 	footer := widgets.NewParagraph()
-	footer.Text = "Press q to quit, Press h or l to switch tabs"
-	footer.SetRect(0, 0, 50, 1)
-	footer.Border = false
-	footer.TextStyle.Bg = ui.ColorYellow
+	footer.Title = "Apreta q para salir ----------------------------------------"
+	footer.SetRect(0, 0, termWidth, 1)
+	footer.Border = true
+	footer.TextStyle.Bg = ui.ColorMagenta
 
+	logs := widgets.NewParagraph()
+	logs.Title = "LOGS CRUDOS DEL NGINX ACCESS LOG"
+	logs.SetRect(0, 0, termWidth,termHeight-200)
+	logs.Border = true
+	
+
+
+	ips := widgets.NewList()
+	ips.Rows = []string{
+		"1230 999.999.999.000",
+		"1230 999.999.999.999",
+		"1230 999.999.999.999",
+		"1230 999.999.999.999",
+		"1230 999.999.999.999",
+		"1230 999.999.999.999",
+	}
+	ips.Title = "IPs"
+	ips.Border = true
+
+	REST := widgets.NewList()
+	REST.Rows = []string{
+		"GET",
+		"POST",
+		"HEAD",
+		"UPDATE",
+		"DELETE",
+	}
+	REST.Title = "REST"
+	REST.Border = true
 
 	grid := ui.NewGrid()
 	grid.SetRect(0, 0, termWidth, termHeight)
 	
 	grid.Set(
-		ui.NewRow(1.0/2,
-			ui.NewCol(1.0/2, header),
+		ui.NewRow(0.2,
+			ui.NewCol(0.2, ips),
+			ui.NewCol(0.7, header),
+			ui.NewCol(0.1, REST),
 		),
-		ui.NewRow(1.0/2,
-			ui.NewCol(1.0/2, footer),
+		ui.NewRow(0.7,
+			ui.NewCol(1.0, logs),
+		),
+		ui.NewRow(0.1,
+			ui.NewCol(1.0, footer),
 		),
 	)
-
-
-
+	
 
 	ui.Render(grid)
 
@@ -167,6 +200,7 @@ func read_log_file(log_file string, format string){
 	
 	var cont int
 	cont = 0
+	start := time.Now()
 	for {
 		// var rec *gonx.Entry
 		rec, err := reader.Read()
@@ -176,8 +210,25 @@ func read_log_file(log_file string, format string){
 		cont++
 
 		var remote_addr, _ = rec.Field("remote_addr")
+		if remote_addr=="nil"{
+			fmt.Printf("%+v ", remote_addr )
 
-		fmt.Printf("%+v\n", remote_addr )
+		}
+		// var time_local, _ = rec.Field("time_local")
+		// var rest, _ = rec.Field("rest")
+		// var request, _ = rec.Field("request")
+		// var status, _ = rec.Field("status")
+		// var body_bytes_sent, _ = rec.Field("body_bytes_sent")
+
+		// var http_referer, _ = rec.Field("remote_addr")
+		// var http_user_agent, _ = rec.Field("remote_addr")
+
+		// fmt.Printf("%+v ", remote_addr )
+		// fmt.Printf("%+v ", status )
+		// fmt.Printf("%+v ", rest )
+		// fmt.Printf("%+v ", time_local )
+		// fmt.Printf("%+v ", body_bytes_sent )
+		// fmt.Printf("%+v\n", request )
 		
 		// var _record LogRecord
 		// _record.remote_addr
@@ -192,8 +243,9 @@ func read_log_file(log_file string, format string){
 
 		// LogRecord
 	}
-	// fmt.Printf("Parsed entry: \n", cont)
-	// fmt.Println(cont)
+	
+	duration := time.Since(start)
+	fmt.Printf("%v lines readed, it takes %v\n", cont, duration)
 	// fmt.Println(log_file)
 	// fmt.Println(logReader)
 
