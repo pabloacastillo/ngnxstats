@@ -9,8 +9,8 @@ import (
 	// "strings"
 	"gopkg.in/urfave/cli.v1"
 	"github.com/satyrius/gonx"
-	ui "github.com/gizak/termui"
-	"github.com/gizak/termui/widgets"
+	ui "github.com/gizak/termui/v3"
+	"github.com/gizak/termui/v3/widgets"
 )
 
 var app = cli.NewApp()
@@ -20,8 +20,8 @@ type LogRecord struct {
     time_local  string
     rest string
     request string
-    status int
-    body_bytes_sent int
+    status string
+    body_bytes_sent string
     http_referer string
     http_user_agent string
 }
@@ -40,51 +40,41 @@ func flags(){
 			Name: "log, l",
 			Usage: "Read log from `FILE` ",
 			Value: "/var/log/nginx/access.log",
+		}, cli.StringFlag{
+			Name: "format, f",
+			Usage: "Log file format ",
+			Value: "$remote_addr - - [$time_local] \"$rest $request $http_type\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\"",
 		},
 	}
 
-	// app.Flags = []cli.Flag {
-	// 	cli.StringFlag{
-	// 		Name: "format, f",
-	// 		Usage: "Log file format ",
-	// 		Value: "$remote_addr - - [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\"",
-	// 	},
-	// }
 
+	var name   = "/var/log/nginx/acccess.log"
+	// var format = "$remote_addr - - [$time_local] \"$rest $request $http_type\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\""
+	var format = "$remote_addr - - [$time_local] \"$rest $request $http_type\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\""
+
+	// 190.104.148.41 - - [01/Jul/2019:06:26:45 -0400] "GET /wp-content/uploads/2017/09/if_Application_728900.png HTTP/1.1" 404 209 "-" "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36"
 	
-	app.Action = func(c *cli.Context) error {
-		name := "/var/log/nginx/acccess.log"
-		format:="$remote_addr - - [$time_local] \"$rest $request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\""
-		
-		// 104.236.216.165 - - [01/Jun/2019:06:25:18 -0400] "POST /wp-cron.php?doing_wp_cron=1559384718.5513510704040527343750 HTTP/1.1" 200 31 "https://www.obedira.com.py/wp-cron.php?doing_wp_cron=1559384718.5513510704040527343750" "WordPress/5.2.1; https://www.obedira.com.py"
 
-
-		if c.NArg() > 0 {
-			
-			if(c.String("log")!=""){
-				name = c.String("log")
-			}
-
-
-		}
+	app.Action = func(c *cli.Context) {
 
 		if(c.String("log")!=""){
 			name = c.String("log")
 		}
 
-		// if(c.String("format")!=""){
-		// 	format = c.String("format")
-		// }
-
-		fmt.Println("Hola", format)
+		if(c.String("format")!=""){
+			format = c.String("format")
+		}
+	
 		fmt.Println("Hola", name)
-		read_log_file(name,format)
-		// fmt.Println("Hola", c.String("log"))
-		return nil
+		fmt.Println("Hola", format)
+
+		read_and_draw(name,format)
 	}
 }
 
-func draw_interface(){
+
+
+func draw_interface(records []LogRecord){
 
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
@@ -101,18 +91,36 @@ func draw_interface(){
 	header.TextStyle.Bg = ui.ColorBlue
 
 	footer := widgets.NewParagraph()
-	footer.Title = "Apreta q para salir ----------------------------------------"
+	footer.Title = "Apreta q para salir "
 	footer.SetRect(0, 0, termWidth, 1)
 	footer.Border = true
 	footer.TextStyle.Bg = ui.ColorMagenta
 
-	logs := widgets.NewParagraph()
+	// logs := widgets.NewParagraph()
+	logs := widgets.NewTable()
 	logs.Title = "LOGS CRUDOS DEL NGINX ACCESS LOG"
-	logs.SetRect(0, 0, termWidth,termHeight-200)
+	logs.SetRect(0, 0, termWidth,termHeight)
 	logs.Border = true
+	logs.RowSeparator = false
+	logs.FillRow=true
+	logs.RowStyles[0] = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierBold)
+	logs.Rows = append(logs.Rows, []string{ "IP              .", "TIME                       .", "REST", "REQUEST", "STATUS", "SIZE", "REFERER"})
+
+	for k, v := range records {
+
+		if(v.status[:1]=="4"){
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorRed, ui.ColorBlack)
+		}
+		if(v.status[:1]=="2"){
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorGreen, ui.ColorBlack)
+		}
+		if(v.status[:1]=="3"){
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorCyan, ui.ColorBlack)
+		}
+
+		logs.Rows = append(logs.Rows, []string{ v.remote_addr, v.time_local, v.rest, v.request, v.status, v.body_bytes_sent, v.http_referer})
+	}
 	
-
-
 	ips := widgets.NewList()
 	ips.Rows = []string{
 		"1230 999.999.999.000",
@@ -156,33 +164,56 @@ func draw_interface(){
 
 	ui.Render(grid)
 
-	for e := range ui.PollEvents() {
+	uiEvents := ui.PollEvents()
+	ticker := time.NewTicker(time.Second).C
 
-		switch e.ID {
-			case "q", "<C-c>":
-				return
+	for {
+		select {
+			case e := <-uiEvents:
+				switch e.ID {
+					case "q", "<C-c>":
+						return
+					case "<Resize>":
+						payload := e.Payload.(ui.Resize)
+						grid.SetRect(0, 0, payload.Width, payload.Height)
+						ui.Clear()
+						ui.Render(grid)
+				}
+			case <- ticker:
+				ui.Render(grid)
 		}
-
-		// if e.Type == ui.KeyboardEvent {
-		// 	break
-		// }
 	}
+
+	// for e := range ui.PollEvents() {
+
+	// 	switch e.ID {
+	// 		case "q", "<C-c>":
+	// 			return
+	// 	}
+	// }
 }
 
 
-func main() {
 
+func main() {
 	info()
 	flags()
-	draw_interface()
+
 
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
-	}
+	}	
 }
 
-func read_log_file(log_file string, format string){
+func read_and_draw(log_file string, log_format string){
+
+	var records []LogRecord =read_log_file(log_file,log_format)
+	draw_interface(records)	
+
+}
+
+func read_log_file(log_file string, format string) ([]LogRecord ){
 	
 	var logReader io.Reader
 	file, err := os.Open(log_file)
@@ -192,17 +223,14 @@ func read_log_file(log_file string, format string){
 	logReader = file
 	defer file.Close()
 
-	// var format="$remote_addr - - [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\""
-	// 104.236.216.165 - - [01/Jun/2019:06:25:18 -0400] "POST /wp-cron.php?doing_wp_cron=1559384718.5513510704040527343750 HTTP/1.1" 200 31 "https://www.obedira.com.py/wp-cron.php?doing_wp_cron=1559384718.5513510704040527343750" "WordPress/5.2.1; https://www.obedira.com.py"
-
-
 	reader := gonx.NewReader(logReader, format)
 	
 	var cont int
 	cont = 0
 	start := time.Now()
+	var records []LogRecord
+
 	for {
-		// var rec *gonx.Entry
 		rec, err := reader.Read()
 		if err == io.EOF {
 			break
@@ -214,39 +242,38 @@ func read_log_file(log_file string, format string){
 			fmt.Printf("%+v ", remote_addr )
 
 		}
-		// var time_local, _ = rec.Field("time_local")
-		// var rest, _ = rec.Field("rest")
-		// var request, _ = rec.Field("request")
-		// var status, _ = rec.Field("status")
-		// var body_bytes_sent, _ = rec.Field("body_bytes_sent")
+		var time_local, _ = rec.Field("time_local")
+		var rest, _ = rec.Field("rest")
+		var request, _ = rec.Field("request")
+		var status, _ = rec.Field("status")
+		var body_bytes_sent, _ = rec.Field("body_bytes_sent")
 
-		// var http_referer, _ = rec.Field("remote_addr")
+		var http_referer, _ = rec.Field("http_referer")
 		// var http_user_agent, _ = rec.Field("remote_addr")
 
-		// fmt.Printf("%+v ", remote_addr )
-		// fmt.Printf("%+v ", status )
-		// fmt.Printf("%+v ", rest )
-		// fmt.Printf("%+v ", time_local )
-		// fmt.Printf("%+v ", body_bytes_sent )
-		// fmt.Printf("%+v\n", request )
-		
-		// var _record LogRecord
-		// _record.remote_addr
-		// _record.time_local 
-		// _record.rest
-		// _record.request
-		// _record.status
-		// _record.body_bytes_sent
-		// _record.http_referer
+		var _record LogRecord
+		_record.remote_addr = remote_addr
+		_record.status = status
+		_record.time_local = time_local
+		_record.rest = rest
+		_record.request = request
+		_record.body_bytes_sent = body_bytes_sent
+		_record.http_referer = http_referer
 		// _record.http_user_agent
 
+		records = append(records, _record)
 
-		// LogRecord
 	}
 	
+	var a = records
+
+	for i := len(a)/2-1; i >= 0; i-- {
+		opp := len(a)-1-i
+		a[i], a[opp] = a[opp], a[i]
+	}
+
 	duration := time.Since(start)
 	fmt.Printf("%v lines readed, it takes %v\n", cont, duration)
-	// fmt.Println(log_file)
-	// fmt.Println(logReader)
 
+	return a
 }
