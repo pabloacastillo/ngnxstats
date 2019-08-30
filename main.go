@@ -13,20 +13,20 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 )
 
-var app = cli.NewApp()
-
 type LogRecord struct {
-    remote_addr string
-    time_local  string
-    rest string
-    request string
-    status string
-    body_bytes_sent string
-    http_referer string
-    http_user_agent string
+	remote_addr string
+	time_local  string
+	rest string
+	request string
+	status string
+	body_bytes_sent string
+	http_referer string
+	http_user_agent string
 }
-
 var records [] LogRecord
+
+
+var app = cli.NewApp()
 
 func info(){
 	app.Name = "ngnxstats"
@@ -65,21 +65,26 @@ func flags(){
 			format = c.String("format")
 		}
 	
-		fmt.Println("Hola", name)
-		fmt.Println("Hola", format)
+		// fmt.Println("Hola", name)
+		// fmt.Println("Hola", format)
 
-		read_and_draw(name,format)
+		draw_interface(name,format)
 	}
 }
 
 
 
-func draw_interface(records []LogRecord){
+// func draw_interface(records []LogRecord){
+func draw_interface(log_file string, log_format string){
 
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
 	defer ui.Close()
+
+	var records []LogRecord =read_log_file(log_file,log_format)
+
+
 
 	termWidth, termHeight := ui.TerminalDimensions()
 
@@ -96,30 +101,7 @@ func draw_interface(records []LogRecord){
 	footer.Border = true
 	footer.TextStyle.Bg = ui.ColorMagenta
 
-	// logs := widgets.NewParagraph()
-	logs := widgets.NewTable()
-	logs.Title = "LOGS CRUDOS DEL NGINX ACCESS LOG"
-	logs.SetRect(0, 0, termWidth,termHeight)
-	logs.Border = true
-	logs.RowSeparator = false
-	logs.FillRow=true
-	logs.RowStyles[0] = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierBold)
-	logs.Rows = append(logs.Rows, []string{ "IP              .", "TIME                       .", "REST", "REQUEST", "STATUS", "SIZE", "REFERER"})
-
-	for k, v := range records {
-
-		if(v.status[:1]=="4"){
-			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorRed, ui.ColorBlack)
-		}
-		if(v.status[:1]=="2"){
-			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorGreen, ui.ColorBlack)
-		}
-		if(v.status[:1]=="3"){
-			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorCyan, ui.ColorBlack)
-		}
-
-		logs.Rows = append(logs.Rows, []string{ v.remote_addr, v.time_local, v.rest, v.request, v.status, v.body_bytes_sent, v.http_referer})
-	}
+	raw_logs_table := raw_table(records)
 	
 	ips := widgets.NewList()
 	ips.Rows = []string{
@@ -154,7 +136,7 @@ func draw_interface(records []LogRecord){
 			ui.NewCol(0.1, REST),
 		),
 		ui.NewRow(0.7,
-			ui.NewCol(1.0, logs),
+			ui.NewCol(1.0, raw_logs_table),
 		),
 		ui.NewRow(0.1,
 			ui.NewCol(1.0, footer),
@@ -180,17 +162,13 @@ func draw_interface(records []LogRecord){
 						ui.Render(grid)
 				}
 			case <- ticker:
+				// records =read_log_file(log_file,log_format)
+				// draw_interface(log_file,log_format)
 				ui.Render(grid)
+				// ui.update(grid)
 		}
 	}
 
-	// for e := range ui.PollEvents() {
-
-	// 	switch e.ID {
-	// 		case "q", "<C-c>":
-	// 			return
-	// 	}
-	// }
 }
 
 
@@ -206,12 +184,6 @@ func main() {
 	}	
 }
 
-func read_and_draw(log_file string, log_format string){
-
-	var records []LogRecord =read_log_file(log_file,log_format)
-	draw_interface(records)	
-
-}
 
 func read_log_file(log_file string, format string) ([]LogRecord ){
 	
@@ -227,7 +199,7 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 	
 	var cont int
 	cont = 0
-	start := time.Now()
+	// start := time.Now()
 	var records []LogRecord
 
 	for {
@@ -272,8 +244,56 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 		a[i], a[opp] = a[opp], a[i]
 	}
 
-	duration := time.Since(start)
-	fmt.Printf("%v lines readed, it takes %v\n", cont, duration)
 
 	return a
 }
+
+/**
+
+	888       888     8888888     8888888b.       .d8888b.      8888888888     88888888888      .d8888b.
+	888   o   888       888       888  "Y88b     d88P  Y88b     888                888         d88P  Y88b
+	888  d8b  888       888       888    888     888    888     888                888         Y88b.
+	888 d888b 888       888       888    888     888            8888888            888          "Y888b.
+	888d88888b888       888       888    888     888  88888     888                888             "Y88b.
+	88888P Y88888       888       888    888     888    888     888                888               "888
+	8888P   Y8888       888       888  .d88P     Y88b  d88P     888                888         Y88b  d88P
+	888P     Y888     8888888     8888888P"       "Y8888P88     8888888888         888          "Y8888P"
+
+*/
+
+
+// TABLA DE DATOS CRUDOS
+func raw_table(rawlogs []LogRecord) (*widgets.Table) {
+
+	termWidth, termHeight := ui.TerminalDimensions()
+
+	logs := widgets.NewTable()
+	logs.Title = "LOGS CRUDOS DEL NGINX ACCESS LOG"
+	logs.SetRect(0, 0, termWidth,termHeight)
+	logs.Border = true
+	logs.RowSeparator = false
+	logs.FillRow=true
+	logs.RowStyles[0] = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierBold)
+	logs.Rows = append(logs.Rows, []string{ "IP              .", "TIME                       .", "REST", "REQUEST", "STATUS", "SIZE", "REFERER"})
+
+	for k, v := range rawlogs {
+
+
+		if(v.status[:1]=="4"){
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorRed, ui.ColorBlack)
+		}
+		if(v.status[:1]=="2"){
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorGreen, ui.ColorBlack)
+		}
+		if(v.status[:1]=="3"){
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorCyan, ui.ColorBlack)
+		}
+
+
+		logs.Rows = append(logs.Rows, []string{ v.remote_addr, v.time_local, v.rest, v.request, v.status, v.body_bytes_sent, v.http_referer})
+	}
+
+	return logs;
+
+}
+
