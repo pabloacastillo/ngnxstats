@@ -6,12 +6,21 @@ import (
 	"os"
 	"io"
 	"time"
-	// "strings"
+	"math"
+	"strings"
+	"sort"
 	"gopkg.in/urfave/cli.v1"
 	"github.com/satyrius/gonx"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
+	// "encoding/json"
+	// "github.com/hpcloud/tail"
 )
+
+type SummaryRecord struct {
+	Title string
+	Total int
+}
 
 type LogRecord struct {
 	remote_addr string
@@ -24,7 +33,7 @@ type LogRecord struct {
 	http_user_agent string
 }
 var records [] LogRecord
-
+var file_size int64 = 0
 
 var app = cli.NewApp()
 
@@ -67,7 +76,7 @@ func flags(){
 	
 		// fmt.Println("Hola", name)
 		// fmt.Println("Hola", format)
-
+		file_size = check_file_size(name)
 		draw_interface(name,format)
 	}
 }
@@ -75,72 +84,49 @@ func flags(){
 
 
 // func draw_interface(records []LogRecord){
-func draw_interface(log_file string, log_format string){
+func draw_interface(log_file string, log_format string) {
+
+	var records []LogRecord =read_log_file(log_file,log_format)
 
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
 	defer ui.Close()
 
-	var records []LogRecord =read_log_file(log_file,log_format)
 
 
 
 	termWidth, termHeight := ui.TerminalDimensions()
 
 	
-	header := widgets.NewParagraph()
-	header.Text = "Apreta ctrl+c para salir"
-	header.SetRect(0, 0, termWidth, 1)
-	header.Border = true
-	header.TextStyle.Bg = ui.ColorBlue
+	// footer := widgets.NewParagraph()
+	// footer.Title = "Apreta q para salir "
+	// footer.SetRect(0, 0, termWidth, 1)
+	// footer.Border = true
+	// footer.TextStyle.Bg = ui.ColorMagenta
 
-	footer := widgets.NewParagraph()
-	footer.Title = "Apreta q para salir "
-	footer.SetRect(0, 0, termWidth, 1)
-	footer.Border = true
-	footer.TextStyle.Bg = ui.ColorMagenta
+	// WIDGETS
+	ips:= widget_common_ips(records)
+	rest_chart := widget_rest_chart(records)
+	rest_summary := widget_rest_summary(records)
+	raw_logs_table := widget_raw_table(records)
 
-	raw_logs_table := raw_table(records)
-	
-	ips := widgets.NewList()
-	ips.Rows = []string{
-		"1230 999.999.999.000",
-		"1230 999.999.999.999",
-		"1230 999.999.999.999",
-		"1230 999.999.999.999",
-		"1230 999.999.999.999",
-		"1230 999.999.999.999",
-	}
-	ips.Title = "IPs"
-	ips.Border = true
-
-	REST := widgets.NewList()
-	REST.Rows = []string{
-		"GET",
-		"POST",
-		"HEAD",
-		"UPDATE",
-		"DELETE",
-	}
-	REST.Title = "REST"
-	REST.Border = true
 
 	grid := ui.NewGrid()
 	grid.SetRect(0, 0, termWidth, termHeight)
 	
 	grid.Set(
 		ui.NewRow(0.2,
-			ui.NewCol(0.2, ips),
-			ui.NewCol(0.7, header),
-			ui.NewCol(0.1, REST),
+			ui.NewCol(0.15, ips),
+			ui.NewCol(0.15, rest_summary),
+			ui.NewCol(0.7, rest_chart),
 		),
-		ui.NewRow(0.7,
+		ui.NewRow(0.8,
 			ui.NewCol(1.0, raw_logs_table),
 		),
-		ui.NewRow(0.1,
-			ui.NewCol(1.0, footer),
-		),
+		// ui.NewRow(0.1,
+		// 	ui.NewCol(1.0, footer),
+		// ),
 	)
 	
 
@@ -162,10 +148,12 @@ func draw_interface(log_file string, log_format string){
 						ui.Render(grid)
 				}
 			case <- ticker:
+				tfile_size := check_file_size(log_file)
+				if tfile_size>file_size {
+					file_size = tfile_size
+					draw_interface(log_file,log_format)
+				}
 				// records =read_log_file(log_file,log_format)
-				// draw_interface(log_file,log_format)
-				ui.Render(grid)
-				// ui.update(grid)
 		}
 	}
 
@@ -185,6 +173,15 @@ func main() {
 }
 
 
+func check_file_size(log_file string) int64 {
+	fi, err := os.Stat(log_file) 
+	if err != nil {
+	   panic(err)
+	}
+	fs:=fi.Size()
+	return fs
+}
+
 func read_log_file(log_file string, format string) ([]LogRecord ){
 	
 	var logReader io.Reader
@@ -192,6 +189,7 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 	if err != nil {
 		panic(err)
 	}
+
 	logReader = file
 	defer file.Close()
 
@@ -199,7 +197,8 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 	
 	var cont int
 	cont = 0
-	// start := time.Now()
+
+
 	var records []LogRecord
 
 	for {
@@ -212,7 +211,6 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 		var remote_addr, _ = rec.Field("remote_addr")
 		if remote_addr=="nil"{
 			fmt.Printf("%+v ", remote_addr )
-
 		}
 		var time_local, _ = rec.Field("time_local")
 		var rest, _ = rec.Field("rest")
@@ -232,6 +230,9 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 		_record.body_bytes_sent = body_bytes_sent
 		_record.http_referer = http_referer
 		// _record.http_user_agent
+
+
+
 
 		records = append(records, _record)
 
@@ -262,8 +263,8 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 */
 
 
-// TABLA DE DATOS CRUDOS
-func raw_table(rawlogs []LogRecord) (*widgets.Table) {
+// RAW DATA TABLE
+func widget_raw_table(rawlogs []LogRecord) (*widgets.Table) {
 
 	termWidth, termHeight := ui.TerminalDimensions()
 
@@ -274,19 +275,19 @@ func raw_table(rawlogs []LogRecord) (*widgets.Table) {
 	logs.RowSeparator = false
 	logs.FillRow=true
 	logs.RowStyles[0] = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierBold)
-	logs.Rows = append(logs.Rows, []string{ "IP              .", "TIME                       .", "REST", "REQUEST", "STATUS", "SIZE", "REFERER"})
+	logs.Rows = append(logs.Rows, []string{ "IP              .", "TIME                       .", "REST   .", "REQUEST", "STATUS", "SIZE", "REFERER"})
 
 	for k, v := range rawlogs {
 
 
 		if(v.status[:1]=="4"){
-			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorRed, ui.ColorBlack)
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorRed)
 		}
 		if(v.status[:1]=="2"){
-			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorGreen, ui.ColorBlack)
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorGreen)
 		}
 		if(v.status[:1]=="3"){
-			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorCyan, ui.ColorBlack)
+			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorCyan)
 		}
 
 
@@ -296,4 +297,132 @@ func raw_table(rawlogs []LogRecord) (*widgets.Table) {
 	return logs;
 
 }
+
+// COMMON IPs SUMMARY BY HITS
+func widget_common_ips (rawlogs []LogRecord) (*widgets.List){
+		
+	
+	ips_sum := make(map[string]int)
+	for k := range rawlogs {
+		ips_sum[ rawlogs[k].remote_addr ]++ 
+	}
+
+	var ss []SummaryRecord
+	for k, v := range ips_sum {
+		ss = append(ss, SummaryRecord{k, v} )
+	}
+
+	sort.Slice(ss, func(i, j int) bool {
+		return ss[i].Total > ss[j].Total
+	})
+
+	ips_sum_list :=[]string{}
+	ip_s:=""
+	total_s:=""
+	ipsum_s:=""
+	for _, kv := range ss[:6] {
+
+		ip_s=kv.Title + strings.Repeat(" ", 17 - len(kv.Title) )
+		
+		total_s = fmt.Sprintf("%d",kv.Total)
+		total_s = strings.Repeat(" ", 10 - len(total_s) ) + total_s
+		ipsum_s = ip_s + " " +  total_s
+		ips_sum_list = append(ips_sum_list, ipsum_s )
+
+	}
+
+	ips := widgets.NewList()
+	ips.Rows = ips_sum_list
+	ips.Title = "IPs"
+	ips.Border = true
+
+	return ips
+}
+
+// TOTAL OF REQUEST BY REST TYPE
+func widget_rest_summary (rawlogs []LogRecord) (*widgets.List){
+
+	rest_sum := make(map[string]int)
+	for k := range rawlogs {
+		rest_sum[ rawlogs[k].rest ]++ 
+	}
+
+	var ss []SummaryRecord
+	for k, v := range rest_sum {
+		ss = append(ss, SummaryRecord{k, v} )
+	}
+
+	sort.Slice(ss, func(i, j int) bool {
+		return ss[i].Total > ss[j].Total
+	})
+
+	rest_sum_list :=[]string{}
+	rest_s:=""
+	total_s:=""
+	restsum_s:=""
+	for _, kv := range ss {
+
+		rest_s=kv.Title + strings.Repeat(" ", 8 - len(kv.Title) )
+		
+		total_s = fmt.Sprintf("%d",kv.Total)
+		total_s = strings.Repeat(" ", 15 - len(total_s) ) + total_s
+		restsum_s = rest_s + " " +  total_s
+		rest_sum_list = append(rest_sum_list, restsum_s )
+
+	}
+
+
+	REST := widgets.NewList()
+	REST.Rows = rest_sum_list
+	// REST.Rows = []string{
+	// 	"GET",
+	// 	"HEAD",
+	// 	"POST",
+	// 	"PUT",
+	// 	"PATCH",
+	// 	"DELETE",
+	// 	"CONNECT",
+	// 	"OPTIONS",
+	// 	"TRACE",
+	// }
+	REST.Title = "REST"
+	REST.Border = true
+
+	return REST
+
+}
+
+// 
+func widget_rest_chart(rawlogs []LogRecord) (*widgets.Plot) {
+	
+	termWidth, termHeight := ui.TerminalDimensions()
+
+	sinData := func() [][]float64 {
+		n := 220
+		data := make([][]float64, 2)
+		data[0] = make([]float64, n)
+		data[1] = make([]float64, n)
+		for i := 0; i < n; i++ {
+			data[0][i] = 1 + math.Sin(float64(i)/5)
+			data[1][i] = 1 + math.Cos(float64(i)/5)
+		}
+		return data
+	}()
+
+
+	rest_chart := widgets.NewPlot()
+	rest_chart.Data = sinData
+	rest_chart.AxesColor = ui.ColorWhite
+	rest_chart.Marker = widgets.MarkerDot
+	rest_chart.ShowAxes = false
+	rest_chart.SetRect(0, 0, termWidth, termHeight - termHeight + 1)
+	rest_chart.Border = false
+	return rest_chart
+}
+
+
+
+
+
+
 
