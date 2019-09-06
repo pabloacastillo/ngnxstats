@@ -320,7 +320,7 @@ func widget_common_ips (rawlogs []LogRecord) (*widgets.List){
 	ip_s:=""
 	total_s:=""
 	ipsum_s:=""
-	for _, kv := range ss[:6] {
+	for _, kv := range ss[:7] {
 
 		ip_s=kv.Title + strings.Repeat(" ", 17 - len(kv.Title) )
 		
@@ -360,9 +360,13 @@ func widget_rest_summary (rawlogs []LogRecord) (*widgets.List){
 	rest_s:=""
 	total_s:=""
 	restsum_s:=""
-	for _, kv := range ss {
+	for _, kv := range ss[:7] {
 
-		rest_s=kv.Title + strings.Repeat(" ", 8 - len(kv.Title) )
+		if len(kv.Title)<8{
+			rest_s=kv.Title + strings.Repeat(" ", 8 - len(kv.Title) )
+		} else {
+			rest_s=kv.Title[0:8]
+		}
 		
 		total_s = fmt.Sprintf("%d",kv.Total)
 		total_s = strings.Repeat(" ", 15 - len(total_s) ) + total_s
