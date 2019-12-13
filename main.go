@@ -165,7 +165,6 @@ func main() {
 	info()
 	flags()
 
-
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
@@ -232,8 +231,6 @@ func read_log_file(log_file string, format string) ([]LogRecord ){
 		// _record.http_user_agent
 
 
-
-
 		records = append(records, _record)
 
 	}
@@ -279,7 +276,6 @@ func widget_raw_table(rawlogs []LogRecord) (*widgets.Table) {
 
 	for k, v := range rawlogs {
 
-
 		if(v.status[:1]=="4"){
 			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorRed)
 		}
@@ -289,7 +285,6 @@ func widget_raw_table(rawlogs []LogRecord) (*widgets.Table) {
 		if(v.status[:1]=="3"){
 			logs.RowStyles[k+1] = ui.NewStyle(ui.ColorCyan)
 		}
-
 
 		logs.Rows = append(logs.Rows, []string{ v.remote_addr, v.time_local, v.rest, v.request, v.status, v.body_bytes_sent, v.http_referer})
 	}
@@ -320,7 +315,7 @@ func widget_common_ips (rawlogs []LogRecord) (*widgets.List){
 	ip_s:=""
 	total_s:=""
 	ipsum_s:=""
-	for _, kv := range ss[:7] {
+	for _, kv := range ss[:14] {
 
 		ip_s=kv.Title + strings.Repeat(" ", 17 - len(kv.Title) )
 		
@@ -360,8 +355,12 @@ func widget_rest_summary (rawlogs []LogRecord) (*widgets.List){
 	rest_s:=""
 	total_s:=""
 	restsum_s:=""
-	for _, kv := range ss[:7] {
 
+
+	for _, kv := range ss {
+		if(len(ss)>7){
+			ss = ss[:7]
+		}
 		if len(kv.Title)<8{
 			rest_s=kv.Title + strings.Repeat(" ", 8 - len(kv.Title) )
 		} else {
@@ -372,7 +371,6 @@ func widget_rest_summary (rawlogs []LogRecord) (*widgets.List){
 		total_s = strings.Repeat(" ", 15 - len(total_s) ) + total_s
 		restsum_s = rest_s + " " +  total_s
 		rest_sum_list = append(rest_sum_list, restsum_s )
-
 	}
 
 
